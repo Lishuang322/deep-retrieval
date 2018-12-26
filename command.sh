@@ -1,0 +1,1 @@
+python test.py --gpu 1 --S 800 --L 2 --proto deploy_resnet101_normpython.prototxt --weights model.caffemodel --dataset /data/data-hulishuang/img-dataset/oxford_smeared/random/t190_p400/picture --label /data/data-hulishuang/img-dataset/oxford_label --eval_binary ./compute_ap --temp_dir /data/data-hulishuang/deep-retrieval/oxford/random/s800_L2_t190_p400 --dataset_name Oxford 
