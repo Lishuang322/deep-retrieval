@@ -130,8 +130,9 @@ class ImageHelper:
 
 
 class Dataset:
-    def __init__(self, path, eval_binary_path):
+    def __init__(self, path,lab, eval_binary_path):
         self.path = path
+        self.lab = lab
         self.eval_binary_path = eval_binary_path
         # Some images from the Paris dataset are corrupted. Standard practice is
         # to ignore them
@@ -159,8 +160,8 @@ class Dataset:
 
     def load(self):
         # Load the dataset GT
-        self.lab_root = '{0}/lab/'.format(self.path)
-        self.img_root = '{0}/jpg/'.format(self.path)
+        self.lab_root = '{0}/'.format(self.lab)
+        self.img_root = '{0}/'.format(self.path)
         lab_filenames = np.sort(os.listdir(self.lab_root))
         # Get the filenames without the extension
         self.img_filenames = [e[:-4] for e in np.sort(os.listdir(self.img_root)) if e[:-4] not in self.blacklisted]
@@ -171,13 +172,13 @@ class Dataset:
         # ii) get the relevant regions of interest of the queries,
         # iii) get the indexes of the dataset images that are queries
         # iv) get the relevants / non-relevants list
-        self.relevants = {}
-        self.junk = {}
-        self.non_relevants = {}
+        #self.relevants = {}
+        #self.junk = {}
+        #self.non_relevants = {}
 
         self.filename_to_name = {}
         self.name_to_filename = OrderedDict()
-        self.q_roi = {}
+        #self.q_roi = {}
         for e in lab_filenames:
             if e.endswith('_query.txt'):
                 q_name = e[:-len('_query.txt')]
@@ -185,14 +186,14 @@ class Dataset:
                 q_filename = q_data[0][5:] if q_data[0].startswith('oxc1_') else q_data[0]
                 self.filename_to_name[q_filename] = q_name
                 self.name_to_filename[q_name] = q_filename
-                good = set([e.strip() for e in file("{0}/{1}_ok.txt".format(self.lab_root, q_name))])
-                good = good.union(set([e.strip() for e in file("{0}/{1}_good.txt".format(self.lab_root, q_name))]))
-                junk = set([e.strip() for e in file("{0}/{1}_junk.txt".format(self.lab_root, q_name))])
-                good_plus_junk = good.union(junk)
-                self.relevants[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] in good]
-                self.junk[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] in junk]
-                self.non_relevants[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] not in good_plus_junk]
-                self.q_roi[q_name] = np.array(map(float, q_data[1:]), dtype=np.float32)
+                #good = set([e.strip() for e in file("{0}/{1}_ok.txt".format(self.lab_root, q_name))])
+                #good = good.union(set([e.strip() for e in file("{0}/{1}_good.txt".format(self.lab_root, q_name))]))
+                #junk = set([e.strip() for e in file("{0}/{1}_junk.txt".format(self.lab_root, q_name))])
+                #good_plus_junk = good.union(junk)
+                #self.relevants[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] in good]
+                #self.junk[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] in junk]
+                #self.non_relevants[q_name] = [i for i in range(len(self.img_filenames)) if self.img_filenames[i] not in good_plus_junk]
+                #self.q_roi[q_name] = np.array(map(float, q_data[1:]), dtype=np.float32)
 
         self.q_names = self.name_to_filename.keys()
         self.q_index = np.array([self.img_filenames.index(self.name_to_filename[qn]) for qn in self.q_names])
@@ -220,14 +221,14 @@ class Dataset:
         return map_
 
     def get_filename(self, i):
-        return os.path.normpath("{0}/{1}.jpg".format(self.img_root, self.img_filenames[i]))
+        return os.path.normpath("{0}/{1}.png".format(self.img_root, self.img_filenames[i]))
 
     def get_query_filename(self, i):
-        return os.path.normpath("{0}/{1}.jpg".format(self.img_root, self.img_filenames[self.q_index[i]]))
-
+        return os.path.normpath("{0}/{1}.png".format(self.img_root, self.img_filenames[self.q_index[i]]))
+'''
     def get_query_roi(self, i):
         return self.q_roi[self.q_names[i]]
-
+'''
 
 def extract_features(dataset, image_helper, net, args):
     Ss = [args.S, ] if not args.multires else [args.S - 250, args.S, args.S + 250]
@@ -242,7 +243,7 @@ def extract_features(dataset, image_helper, net, args):
             features_queries = np.zeros((N_queries, dim_features), dtype=np.float32)
             for i in tqdm(range(N_queries), file=sys.stdout, leave=False, dynamic_ncols=True):
                 # Load image, process image, get image regions, feed into the network, get descriptor, and store
-                I, R = image_helper.prepare_image_and_grid_regions_for_network(dataset.get_query_filename(i), roi=dataset.get_query_roi(i))
+                I, R = image_helper.prepare_image_and_grid_regions_for_network(dataset.get_query_filename(i), roi=None)
                 features_queries[i] = image_helper.get_rmac_features(I, R, net)
             np.save(out_queries_fname, features_queries)
     features_queries = np.dstack([np.load("{0}/{1}_S{2}_L{3}_queries.npy".format(args.temp_dir, args.dataset_name, S, args.L)) for S in Ss]).sum(axis=2)
@@ -276,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--proto', type=str, required=True, help='Path to the prototxt file')
     parser.add_argument('--weights', type=str, required=True, help='Path to the caffemodel file')
     parser.add_argument('--dataset', type=str, required=True, help='Path to the Oxford / Paris directory')
+    parser.add_argument('--label', type=str, required=True, help='Path to the Oxford / Paris label directory')
     parser.add_argument('--dataset_name', type=str, required=True, help='Dataset name')
     parser.add_argument('--eval_binary', type=str, required=True, help='Path to the compute_ap binary to evaluate Oxford / Paris')
     parser.add_argument('--temp_dir', type=str, required=True, help='Path to a temporary directory to store features and scores')
@@ -297,7 +299,7 @@ if __name__ == '__main__':
     net = caffe.Net(args.proto, args.weights, caffe.TEST)
 
     # Load the dataset and the image helper
-    dataset = Dataset(args.dataset, args.eval_binary)
+    dataset = Dataset(args.dataset,args.label, args.eval_binary)
     image_helper = ImageHelper(args.S, args.L, args.means)
 
     # Extract features
